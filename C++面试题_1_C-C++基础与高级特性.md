@@ -2,6 +2,7 @@
 
 ### 1. 智能指针实现原理
 **答案**：智能指针是C++中用于自动管理动态内存的类模板，通过RAII（资源获取即初始化）机制实现。它在构造时获取资源，在析构时自动释放资源，避免内存泄漏。
+
 **示例**：
 ```cpp
 // 简单智能指针实现
@@ -9,18 +10,23 @@ template<typename T>
 class SmartPtr {
 public:
     SmartPtr(T* ptr = nullptr) : m_ptr(ptr) {}
+    
     ~SmartPtr() {
         delete m_ptr;
         m_ptr = nullptr;
     }
+    
     // 禁止拷贝构造和赋值操作（简单实现）
     SmartPtr(const SmartPtr&) = delete;
     SmartPtr& operator=(const SmartPtr&) = delete;
+    
     T& operator*() const { return *m_ptr; }
     T* operator->() const { return m_ptr; }
+    
 private:
     T* m_ptr;
 };
+
 // 使用示例
 int main() {
     SmartPtr<int> ptr(new int(10));
@@ -29,6 +35,7 @@ int main() {
     return 0;
 }
 ```
+
 ### 2. 智能指针的计数器何时改变
 **答案**：智能指针（如shared_ptr）的引用计数器在以下情况会改变：
 - 创建shared_ptr时，计数器初始化为1
@@ -36,462 +43,700 @@ int main() {
 - 赋值给其他shared_ptr时，计数器+1
 - shared_ptr被销毁时（离开作用域或手动reset），计数器-1
 - 计数器为0时，自动释放所管理的资源
+
 **示例**：
 ```cpp
 #include <memory>
 #include <iostream>
+
 int main() {
     std::shared_ptr<int> ptr1(new int(10));
     std::cout << "ptr1计数: " << ptr1.use_count() << std::endl;  // 输出：1
+    
     std::shared_ptr<int> ptr2 = ptr1;  // 拷贝构造，计数+1
     std::cout << "ptr1计数: " << ptr1.use_count() << std::endl;  // 输出：2
     std::cout << "ptr2计数: " << ptr2.use_count() << std::endl;  // 输出：2
+    
     {
         std::shared_ptr<int> ptr3(ptr1);  // 拷贝构造，计数+1
         std::cout << "ptr1计数: " << ptr1.use_count() << std::endl;  // 输出：3
     }  // ptr3离开作用域，计数-1
+    
     std::cout << "ptr1计数: " << ptr1.use_count() << std::endl;  // 输出：2
+    
     ptr1.reset();  // 手动reset，计数-1
     std::cout << "ptr2计数: " << ptr2.use_count() << std::endl;  // 输出：1
+    
     return 0;
 }
 ```
+
 ### 3. 智能指针和管理的对象分别在哪个区
 **答案**：智能指针本身是一个栈上的对象，而它所管理的资源（指针指向的对象）在堆区。利用栈对象超出生命周期后自动析构的特性，无需手动delete释放资源。
+
 **示例**：
 ```cpp
 #include <memory>
+
 int main() {
     // smart_ptr是栈上对象
     std::shared_ptr<int> smart_ptr(new int(10));  // 管理的int对象在堆区
+    
     // 离开作用域时，smart_ptr（栈对象）自动析构，同时释放堆上的int对象
     return 0;
 }
 ```
+
 ### 4. 面向对象的特性：多态原理
 **答案**：多态是C++面向对象的核心特性之一，允许基类指针或引用指向派生类对象，并在运行时根据实际对象类型调用相应的方法。
+
 实现原理：
 - 虚函数：基类中声明为`virtual`的函数
 - 虚函数表（vtable）：每个包含虚函数的类都有一个虚函数表，存储该类所有虚函数的地址
 - 虚表指针（vptr）：每个对象都有一个虚表指针，指向所属类的虚函数表
 - 动态绑定：运行时通过vptr找到vtable，再调用相应的函数
+
 **示例**：
 ```cpp
 #include <iostream>
+
 class Base {
 public:
     virtual void show() {  // 虚函数
         std::cout << "Base::show()" << std::endl;
     }
+    
     virtual ~Base() {}
 };
+
 class Derived : public Base {
 public:
     void show() override {  // 重写虚函数
         std::cout << "Derived::show()" << std::endl;
     }
 };
-int main() {
-    Base* base_ptr = new Derived();  // 基类指针指向派生类对象
-    base_ptr->show();  // 运行时多态，调用Derived::show()
-    delete base_ptr;
-    return 0;
-}
-```
-### 5. 智能指针为什么不能循环引用，如何解决
-**答案**：循环引用是指两个或多个对象互相持有对方的shared_ptr，导致引用计数永远不为0，从而产生内存泄漏。
-
-解决方法：
-- 使用weak_ptr：weak_ptr是一种不增加引用计数的智能指针，可以观察shared_ptr管理的对象，但不拥有它。
-- 打破循环：在适当的时机手动解除循环引用。
-
-**示例**：
-```cpp
-#include <memory>
-#include <iostream>
-
-class B;
-class A {
-public:
-    std::shared_ptr<B> m_ptr_b;
-    ~A() { std::cout << "A被销毁" << std::endl; }
-};
-
-class B {
-public:
-    // 使用weak_ptr代替shared_ptr
-    std::weak_ptr<A> m_ptr_a;
-    ~B() { std::cout << "B被销毁" << std::endl; }
-};
 
 int main() {
-    {
-        std::shared_ptr<A> ptr_a(new A());
-        std::shared_ptr<B> ptr_b(new B());
-        
-        ptr_a->m_ptr_b = ptr_b;
-        ptr_b->m_ptr_a = ptr_a;  // weak_ptr不会增加引用计数
-    }  // 离开作用域时，ptr_a和ptr_b的引用计数都为0，对象被正确销毁
+    Base* ptr = new Derived();  // 基类指针指向派生类对象
+    ptr->show();  // 运行时绑定，调用Derived::show()
     
-    std::cout << "程序结束" << std::endl;
+    delete ptr;
     return 0;
 }
 ```
-### 6. static_cast、dynamic_cast、const_cast、reinterpret_cast的区别和使用场景
-**答案**：
 
-| 类型转换 | 功能 | 使用场景 | 安全性 |
-|---------|------|---------|-------|
-| static_cast | 静态类型转换，编译时检查 | 基本类型转换、向上转型（子类转基类）、void*转换 | 不保证运行时安全 |
-| dynamic_cast | 动态类型转换，运行时检查 | 向下转型（基类转子类）、交叉转型 | 安全，但有性能开销 |
-| const_cast | 移除const/volatile属性 | 临时修改对象的const属性 | 需谨慎使用，可能导致未定义行为 |
-| reinterpret_cast | 重新解释内存，强制类型转换 | 指针类型转换、整数与指针互转 | 最不安全，完全依赖程序员的判断 |
+### 5. 介绍一下虚函数，虚函数怎么实现的
+**答案**：虚函数是C++中实现多态的机制，通过在基类中使用`virtual`关键字声明，允许派生类重写这些函数。
+
+实现机制：
+1. 虚函数表（vtable）：每个包含虚函数的类都有一个虚函数表，存储该类所有虚函数的地址。
+2. 虚表指针（vptr）：每个对象在创建时会分配一个隐藏的虚表指针，指向所属类的虚函数表。
+3. 动态绑定：当通过基类指针或引用调用虚函数时，编译器会生成代码，通过对象的vptr找到对应的vtable，然后根据函数在表中的位置调用相应的函数。
 
 **示例**：
 ```cpp
 #include <iostream>
-class Base {
+
+class Shape {
 public:
-    virtual void show() {}
+    virtual double area() const = 0;  // 纯虚函数
+    virtual ~Shape() {}
 };
-class Derived : public Base {
+
+class Circle : public Shape {
+private:
+    double radius;
+    
 public:
-    void show() override {}
-    void derived_func() { std::cout << "Derived::derived_func()" << std::endl; }
+    Circle(double r) : radius(r) {}
+    
+    double area() const override {  // 重写纯虚函数
+        return 3.14159 * radius * radius;
+    }
+};
+
+class Rectangle : public Shape {
+private:
+    double width;
+    double height;
+    
+public:
+    Rectangle(double w, double h) : width(w), height(h) {}
+    
+    double area() const override {  // 重写纯虚函数
+        return width * height;
+    }
 };
 
 int main() {
-    // static_cast
-    int a = 10;
-    double b = static_cast<double>(a);  // 基本类型转换
+    Shape* shapes[] = {
+        new Circle(5.0),
+        new Rectangle(3.0, 4.0)
+    };
     
-    // dynamic_cast
-    Base* base_ptr = new Derived();
-    Derived* derived_ptr = dynamic_cast<Derived*>(base_ptr);  // 向下转型
-    if (derived_ptr) {
-        derived_ptr->derived_func();
+    for (int i = 0; i < 2; i++) {
+        std::cout << "Area: " << shapes[i]->area() << std::endl;
+#include <iostream>
+#include <vector>
+
+class Animal {
+public:
+    virtual void makeSound() const = 0;
+    virtual ~Animal() {}
+};
+
+class Dog : public Animal {
+public:
+    void makeSound() const override {
+        std::cout << "Woof!" << std::endl;
+    }
+};
+
+class Cat : public Animal {
+public:
+    void makeSound() const override {
+        std::cout << "Meow!" << std::endl;
+    }
+};
+
+// 多态使用场景：统一处理不同类型的对象
+void letAnimalsSpeak(const std::vector<Animal*>& animals) {
+    for (const auto& animal : animals) {
+        animal->makeSound();  // 多态调用
+    }
+}
+
+int main() {
+    std::vector<Animal*> animals;
+    animals.push_back(new Dog());
+    animals.push_back(new Cat());
+    
+    letAnimalsSpeak(animals);  // 统一处理不同动物
+    
+    for (auto animal : animals) {
+        delete animal;
     }
     
-    // const_cast
-    const int c = 20;
-    int* d = const_cast<int*>(&c);  // 移除const属性
-    
-    // reinterpret_cast
-    int* e = &a;
-    long f = reinterpret_cast<long>(e);  // 指针转整数
-    
-    delete base_ptr;
     return 0;
 }
-```
-### 7. 左值引用和右值引用的区别
+
+### 6. 多态和继承在什么情况下使用
 **答案**：
-
-| 类型 | 符号 | 引用对象 | 主要用途 |
-|------|------|---------|---------|
-| 左值引用 | & | 可寻址的左值 | 避免拷贝、函数参数和返回值 |
-| 右值引用 | && | 临时对象（右值） | 移动语义、完美转发 |
-
-**示例**：
-```cpp
-#include <iostream>
-#include <string>
-
-void process_lvalue(const std::string& str) {
-    std::cout << "左值引用: " << str << std::endl;
-}
-
-void process_rvalue(std::string&& str) {
-    std::cout << "右值引用: " << str << std::endl;
-}
-
-int main() {
-    std::string s1 = "Hello";
-    process_lvalue(s1);  // 左值传递
-    process_rvalue(std::move(s1));  // 强制转为右值
-    process_rvalue("World");  // 临时对象是右值
-    return 0;
-}
-```
-### 8. 移动构造和移动赋值的作用
-**答案**：移动构造和移动赋值是C++11引入的特性，用于优化性能，避免不必要的拷贝操作。它们通过"窃取"临时对象（右值）的资源来构造或赋值新对象，而不是复制资源。
+- **继承**：当需要创建一个新类，该类需要复用现有类的属性和方法，并可能添加新的属性和方法时使用继承。继承体现了"is-a"的关系。
+- **多态**：当需要对不同类型的对象进行统一处理，或者需要在运行时根据对象的实际类型调用相应的方法时使用多态。多态提高了代码的灵活性和可扩展性。
 
 **示例**：
 ```cpp
 #include <iostream>
 #include <vector>
 
-class MyString {
+class Animal {
 public:
-    // 默认构造函数
-    MyString() : m_data(nullptr), m_size(0) {
-        std::cout << "默认构造函数" << std::endl;
+    virtual void makeSound() const = 0;
+    virtual ~Animal() {}
+};
+
+class Dog : public Animal {
+public:
+    void makeSound() const override {
+        std::cout << "Woof!" << std::endl;
+    }
+};
+
+class Cat : public Animal {
+public:
+    void makeSound() const override {
+        std::cout << "Meow!" << std::endl;
+    }
+};
+
+// 多态使用场景：统一处理不同类型的对象
+void letAnimalsSpeak(const std::vector<Animal*>& animals) {
+    for (const auto& animal : animals) {
+        animal->makeSound();  // 多态调用
+    }
+}
+
+int main() {
+    std::vector<Animal*> animals;
+    animals.push_back(new Dog());
+    animals.push_back(new Cat());
+    
+    letAnimalsSpeak(animals);  // 统一处理不同动物
+    
+    for (auto animal : animals) {
+        delete animal;
     }
     
+    return 0;
+}
+```
+
+### 7. 除了多态和继承还有什么面向对象方法
+**答案**：除了多态和继承，面向对象编程还有以下核心方法：
+- **封装**：将数据和操作数据的方法封装在一起，隐藏内部实现细节，只暴露必要的接口。
+- **抽象**：提取共同特征形成抽象类或接口，定义行为规范而不提供具体实现。
+- **组合**：通过将其他对象作为成员变量来构建更复杂的对象，体现"has-a"的关系。
+- **聚合**：一种特殊的组合关系，表示整体与部分的关系，但部分可以独立于整体存在。
+
+**示例（封装与组合）**：
+```cpp
+#include <iostream>
+#include <string>
+
+// 封装：Person类封装了name和age属性，只通过公共方法访问
+class Person {
+private:
+    std::string name;
+    int age;
+    
+public:
+    Person(const std::string& n, int a) : name(n), age(a) {}
+    
+    std::string getName() const { return name; }
+    int getAge() const { return age; }
+};
+
+// 组合：Car类包含Person对象作为成员
+class Car {
+private:
+    std::string brand;
+    Person owner;  // 组合关系：Car有一个Person作为所有者
+    
+public:
+    Car(const std::string& b, const Person& o) : brand(b), owner(o) {}
+    
+    void showInfo() const {
+        std::cout << "Car brand: " << brand << std::endl;
+        std::cout << "Owner: " << owner.getName() << ", Age: " << owner.getAge() << std::endl;
+    }
+};
+
+int main() {
+    Person person("Alice", 30);
+    Car car("Toyota", person);
+    
+    car.showInfo();
+    
+    return 0;
+}
+```
+
+### 8. C++内存分布。什么样的数据在栈区，什么样的在堆区
+**答案**：C++程序的内存分布主要分为以下几个区域：
+- **栈区（Stack）**：由编译器自动分配和释放，存放函数的参数值、局部变量等。特点是速度快，但空间有限。
+- **堆区（Heap）**：由程序员手动分配（new/malloc）和释放（delete/free），若不手动释放，程序结束后由操作系统回收。空间较大，但分配和释放速度较慢。
+- **全局/静态区（Global/Static）**：存放全局变量和静态变量，程序结束后由操作系统释放。
+- **常量区（Constant）**：存放常量字符串等，程序结束后由操作系统释放。
+- **代码区（Code）**：存放程序的二进制代码。
+
+**示例**：
+```cpp
+#include <iostream>
+
+// 全局变量：全局/静态区
+int globalVar = 10;
+
+int main() {
+    // 局部变量：栈区
+    int localVar = 20;
+    
+    // 静态局部变量：全局/静态区
+    static int staticVar = 30;
+    
+    // 常量：常量区
+    const char* constStr = "Hello World";
+    
+    // 动态分配内存：堆区
+    int* heapVar = new int(40);
+    
+    std::cout << "Global var: " << globalVar << std::endl;
+    std::cout << "Local var: " << localVar << std::endl;
+    std::cout << "Static var: " << staticVar << std::endl;
+    std::cout << "Const string: " << constStr << std::endl;
+    std::cout << "Heap var: " << *heapVar << std::endl;
+    
+    delete heapVar;  // 手动释放堆内存
+    return 0;
+}
+```
+
+### 9. C++内存管理（RAII机制）
+**答案**：RAII（Resource Acquisition Is Initialization，资源获取即初始化）是C++中用于管理资源的重要机制。其核心思想是：
+- 在对象构造时获取资源
+- 在对象析构时自动释放资源
+- 利用栈对象的自动销毁特性，确保资源在任何情况下（包括异常）都能被正确释放
+
+**示例**：
+```cpp
+#include <iostream>
+#include <fstream>
+
+// RAII实现文件资源管理
+class FileHandler {
+private:
+    std::ofstream file;
+    
+public:
+    FileHandler(const std::string& filename) : file(filename) {
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open file");
+        }
+        std::cout << "File opened: " << filename << std::endl;
+    }
+    
+    ~FileHandler() {
+        if (file.is_open()) {
+            file.close();
+            std::cout << "File closed" << std::endl;
+        }
+    }
+    
+    // 禁止拷贝构造和赋值（简单实现）
+    FileHandler(const FileHandler&) = delete;
+    FileHandler& operator=(const FileHandler&) = delete;
+    
+    void write(const std::string& content) {
+        file << content << std::endl;
+    }
+};
+
+int main() {
+    try {
+        FileHandler file("test.txt");  // 构造时打开文件
+        file.write("Hello RAII!");      // 使用文件
+        // 离开作用域时自动调用析构函数关闭文件
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+    
+    return 0;
+}
+```
+
+### 10. C++从源程序到可执行程序的过程
+**答案**：C++源程序到可执行程序的过程主要包括四个阶段：
+1. **预处理（Preprocessing）**：处理预编译指令（如#include、#define等），生成.i文件。
+2. **编译（Compilation）**：将预处理后的.i文件编译成汇编语言文件（.s文件）。
+3. **汇编（Assembly）**：将汇编语言文件转换成机器语言目标文件（.o文件或.obj文件）。
+4. **链接（Linking）**：将多个目标文件和库文件链接成一个可执行程序（.exe文件或ELF文件）。
+
+**示例**：
+```bash
+# 假设源文件为main.cpp
+
+# 1. 预处理
+g++ -E main.cpp -o main.i
+
+# 2. 编译
+g++ -S main.i -o main.s
+
+# 3. 汇编
+g++ -c main.s -o main.o
+
+# 4. 链接
+g++ main.o -o main.exe
+
+# 一步完成所有过程
+g++ main.cpp -o main.exe
+```
+
+### 11. 一个对象=另一个对象会发生什么（赋值构造函数）
+**答案**：当使用一个对象给另一个对象赋值时，会调用赋值运算符重载函数（赋值构造函数）。如果没有自定义赋值运算符，编译器会生成默认的赋值运算符，执行浅拷贝。
+
+**示例**：
+```cpp
+#include <iostream>
+#include <cstring>
+
+class String {
+private:
+    char* data;
+    int length;
+    
+public:
     // 构造函数
-    MyString(const char* str) {
-        m_size = strlen(str);
-        m_data = new char[m_size + 1];
-        strcpy(m_data, str);
-        std::cout << "构造函数" << std::endl;
+    String(const char* str = "") {
+        length = strlen(str);
+        data = new char[length + 1];
+        strcpy(data, str);
     }
     
     // 拷贝构造函数
-    MyString(const MyString& other) {
-        m_size = other.m_size;
-        m_data = new char[m_size + 1];
-        strcpy(m_data, other.m_data);
-        std::cout << "拷贝构造函数" << std::endl;
+    String(const String& other) {
+        length = other.length;
+        data = new char[length + 1];
+        strcpy(data, other.data);
     }
     
-    // 移动构造函数
-    MyString(MyString&& other) noexcept {
-        m_data = other.m_data;
-        m_size = other.m_size;
-        other.m_data = nullptr;
-        other.m_size = 0;
-        std::cout << "移动构造函数" << std::endl;
-    }
-    
-    // 拷贝赋值运算符
-    MyString& operator=(const MyString& other) {
-        if (this != &other) {
-            delete[] m_data;
-            m_size = other.m_size;
-            m_data = new char[m_size + 1];
-            strcpy(m_data, other.m_data);
+    // 赋值运算符重载（赋值构造函数）
+    String& operator=(const String& other) {
+        if (this != &other) {  // 防止自赋值
+            // 释放原有资源
+            delete[] data;
+// 分配新资源并拷贝数据
+            length = other.length;
+            data = new char[length + 1];
+            strcpy(data, other.data);
         }
-        std::cout << "拷贝赋值运算符" << std::endl;
-        return *this;
-    }
-    
-    // 移动赋值运算符
-    MyString& operator=(MyString&& other) noexcept {
-        if (this != &other) {
-            delete[] m_data;
-            m_data = other.m_data;
-            m_size = other.m_size;
-            other.m_data = nullptr;
-            other.m_size = 0;
-        }
-        std::cout << "移动赋值运算符" << std::endl;
         return *this;
     }
     
     // 析构函数
-    ~MyString() {
-        if (m_data) {
-            delete[] m_data;
-        }
-        std::cout << "析构函数" << std::endl;
+    ~String() {
+        delete[] data;
     }
     
     const char* c_str() const {
-        return m_data;
-    }
-    
-private:
-    char* m_data;
-    size_t m_size;
-};
-
-int main() {
-    MyString s1 = "Hello";
-    MyString s2 = std::move(s1);  // 使用移动构造函数
-    MyString s3;
-    s3 = std::move(s2);  // 使用移动赋值运算符
-    return 0;
-}
-```
-### 9. 虚函数为什么不能是静态成员函数
-**答案**：虚函数需要通过对象的虚表指针（vptr）来调用，而静态成员函数不属于任何对象，没有this指针，因此无法访问虚表指针。此外，虚函数的调用需要动态绑定，而静态成员函数是在编译时确定的。
-
-**示例**：
-```cpp
-class Base {
-public:
-    // 错误：虚函数不能是静态的
-    // static virtual void func();
-    
-    virtual void virtual_func() {}  // 正确
-    static void static_func() {}  // 正确
-};
-```
-### 10. 内联函数为什么不能是虚函数
-**答案**：内联函数在编译时展开，而虚函数在运行时通过虚表动态绑定。内联函数需要在编译时确定函数体，而虚函数的调用需要在运行时才能确定，两者存在矛盾。因此，编译器通常会忽略虚函数的inline关键字。
-
-**示例**：
-```cpp
-class Base {
-public:
-    // 虚函数的inline关键字通常会被编译器忽略
-    inline virtual void func() {
-        // 函数体
+        return data;
     }
 };
-```
-### 11. 指针和引用的区别
-**答案**：
 
-| 特性 | 指针 | 引用 |
-|------|------|------|
-| 定义方式 | T* ptr; | T& ref = var; |
-| 初始化 | 可以不初始化，默认为nullptr | 必须初始化 |
-| 空值 | 可以为nullptr | 不能为null |
-| 指向对象 | 可以指向不同对象 | 只能指向初始化时的对象 |
-| 算术运算 | 支持指针运算 | 不支持 |
-| 多级 | 支持多级指针（如T**） | 不支持多级引用 |
-|  sizeof | 等于指针大小（与平台有关） | 等于被引用对象的大小 |
-
-**示例**：
-```cpp
 int main() {
-    int a = 10;
+    String str1("Hello");
+    String str2("World");
     
-    // 指针
-    int* ptr = &a;
-    *ptr = 20;  // 修改a的值
-    ptr = nullptr;  // 可以指向空
+    std::cout << "str1: " << str1.c_str() << std::endl;
+    std::cout << "str2: " << str2.c_str() << std::endl;
     
-    // 引用
-    int& ref = a;
-    ref = 30;  // 修改a的值
-    // int& ref2;  // 错误：必须初始化
-    // ref = nullptr;  // 错误：不能指向空
+    str2 = str1;  // 调用赋值运算符重载
+    
+    std::cout << "After assignment:" << std::endl;
+    std::cout << "str1: " << str1.c_str() << std::endl;
+    std::cout << "str2: " << str2.c_str() << std::endl;
     
     return 0;
 }
-```
-### 12. 指针数组和数组指针的区别
-**答案**：
 
-| 类型 | 定义 | 含义 | 大小 |
-|------|------|------|------|
-| 指针数组 | T* arr[N]; | 一个包含N个T*类型指针的数组 | N * sizeof(T*) |
-| 数组指针 | T (*ptr)[N]; | 一个指向包含N个T类型元素的数组的指针 | sizeof(T*) |
+# 一级标题：C++面试题与答案
 
-**示例**：
-```cpp
-int main() {
-    int a[3] = {1, 2, 3};
-    int b[3] = {4, 5, 6};
-    
-    // 指针数组：包含2个int*指针的数组
-    int* arr[2] = {a, b};
-    std::cout << "arr[0][1] = " << arr[0][1] << std::endl;  // 输出：2
-    
-    // 数组指针：指向包含3个int元素的数组的指针
-    int (*ptr)[3] = &a;
-    std::cout << "(*ptr)[1] = " << (*ptr)[1] << std::endl;  // 输出：2
-    
-    return 0;
-}
-```
-### 13. 堆和栈的区别
-**答案**：
+## 二级标题：分类（如"一、C/C++基础与高级特性"）
 
-| 特性 | 栈 | 堆 |
-|------|------|------|
-| 管理方式 | 由编译器自动管理 | 由程序员手动管理（new/delete, malloc/free） |
-| 空间大小 | 较小（通常几MB） | 较大（通常几GB） |
-| 分配方式 | 静态分配（编译时）和动态分配（运行时） | 动态分配（运行时） |
-| 分配效率 | 高（CPU指令直接操作） | 低（需要查找可用内存块） |
-| 内存碎片 | 无 | 有 |
-| 生长方向 | 向下生长 | 向上生长 |
-| 存储内容 | 函数参数、局部变量、返回地址等 | 动态分配的对象 |
+### 三级标题：题目（如"1. 智能指针实现原理"）
+**答案**：使用智能指针或RAII机制可以避免这种情况。智能指针在构造时获取资源，在析构时自动释放资源，即使函数提前return或发生异常，也能确保资源被正确释放。
 
 **示例**：
 ```cpp
-int global_var;  // 全局变量，存储在静态区
-
-int main() {
-    int local_var = 10;  // 局部变量，存储在栈区
-    int* ptr = new int(20);  // 动态分配的int，存储在堆区
-    
-    delete ptr;
-    return 0;
-}
-```
-### 14. 多线程编程中，如何正确使用智能指针
-**答案**：在多线程编程中使用智能指针需要注意以下几点：
-
-1. **shared_ptr的线程安全性**：
-   - shared_ptr的引用计数操作是原子的，线程安全
-   - 但shared_ptr指向的对象本身不是线程安全的，需要额外的同步机制
-
-2. **unique_ptr的线程安全性**：
-   - unique_ptr不支持拷贝，只能移动，通常在单个线程中使用
-   - 如果需要在多个线程间传递unique_ptr，可以使用移动语义
-
-3. **注意事项**：
-   - 避免在多个线程中同时修改同一个shared_ptr指向的对象
-   - 使用互斥锁或其他同步机制保护shared_ptr指向的对象
-   - 不要在多个线程中同时delete同一个指针
-
-**示例**：
-```cpp
+#include <iostream>
 #include <memory>
+
+void functionWithRisk() {
+    // 使用智能指针管理动态内存
+    std::unique_ptr<int> ptr(new int(10));
+    
+    // 模拟可能的错误情况
+    bool errorOccurred = true;
+    if (errorOccurred) {
+        std::cout << "Error occurred, returning..." << std::endl;
+        return;  // 智能指针自动释放内存，不会泄漏
+    }
+    
+    // 如果没有错误，继续使用ptr
+    std::cout << *ptr << std::endl;
+}
+
+int main() {
+    functionWithRisk();
+    // 离开functionWithRisk后，ptr自动析构，内存被释放
+    std::cout << "Program continues, no memory leak" << std::endl;
+    return 0;
+}
+```
+
+### 13. C++11的智能指针有哪些。weak_ptr的使用场景。什么情况下会产生循环引用
+**答案**：C++11引入的智能指针主要有三种：
+- **unique_ptr**：独占所有权的智能指针，不允许拷贝，只能移动。
+- **shared_ptr**：共享所有权的智能指针，使用引用计数管理资源。
+- **weak_ptr**：弱引用的智能指针，不增加引用计数，用于解决shared_ptr的循环引用问题。
+
+**weak_ptr的使用场景**：
+- 解决shared_ptr的循环引用问题
+- 观察资源是否存在，但不影响资源的生命周期
+
+**循环引用示例**：
+```cpp
+#include <iostream>
+#include <memory>
+
+class B;  // 前向声明
+
+class A {
+public:
+    std::shared_ptr<B> b_ptr;  // A持有B的shared_ptr
+    
+    ~A() {
+        std::cout << "A destroyed" << std::endl;
+    }
+};
+
+class B {
+public:
+    std::shared_ptr<A> a_ptr;  // B持有A的shared_ptr
+    
+    ~B() {
+        std::cout << "B destroyed" << std::endl;
+    }
+};
+
+int main() {
+    {
+        std::shared_ptr<A> a(new A());
+        std::shared_ptr<B> b(new B());
+        
+        // 循环引用
+        a->b_ptr = b;
+        b->a_ptr = a;
+        
+        // 引用计数都为2
+        std::cout << "a use_count: " << a.use_count() << std::endl;  // 2
+        std::cout << "b use_count: " << b.use_count() << std::endl;  // 2
+    }  // 离开作用域后，引用计数都变为1，不会调用析构函数，导致内存泄漏
+    
+    std::cout << "Main continues, but A and B are not destroyed!" << std::endl;
+    return 0;
+}
+```
+
+**使用weak_ptr解决循环引用**：
+```cpp
+#include <iostream>
+#include <memory>
+
+class B;  // 前向声明
+
+class A {
+public:
+    std::shared_ptr<B> b_ptr;  // A持有B的shared_ptr
+    
+    ~A() {
+        std::cout << "A destroyed" << std::endl;
+    }
+};
+
+class B {
+public:
+    std::weak_ptr<A> a_ptr;  // B持有A的weak_ptr，不增加引用计数
+    
+    ~B() {
+        std::cout << "B destroyed" << std::endl;
+    }
+};
+
+int main() {
+    {
+        std::shared_ptr<A> a(new A());
+        std::shared_ptr<B> b(new B());
+        
+        a->b_ptr = b;
+        b->a_ptr = a;  // 使用weak_ptr，不增加a的引用计数
+        
+        // a的引用计数为1，b的引用计数为2
+        std::cout << "a use_count: " << a.use_count() << std::endl;  // 1
+        std::cout << "b use_count: " << b.use_count() << std::endl;  // 2
+    }  // 离开作用域后，a先被销毁，然后b被销毁，没有内存泄漏
+    
+    std::cout << "Main continues, A and B are properly destroyed!" << std::endl;
+    return 0;
+}
+```
+
+### 14. 多线程中线程的同步方式有哪些
+**答案**：C++中线程同步的主要方式包括：
+- **互斥量（mutex）**：用于保护共享数据，确保同一时间只有一个线程访问。
+- **条件变量（condition_variable）**：用于线程间的通信，允许一个线程等待另一个线程的信号。
+- **原子操作（atomic）**：用于无锁的线程安全操作。
+- **读写锁（shared_mutex/C++17）**：允许多个线程同时读取，但写入时独占。
+- **信号量（semaphore/C++20）**：用于控制对资源的访问数量。
+
+**示例（互斥量和条件变量）**：
+```cpp
+#include <iostream>
 #include <thread>
 #include <mutex>
-#include <iostream>
+#include <condition_variable>
+#include <queue>
 
-class SharedData {
-public:
-    SharedData(int value) : m_value(value) {}
-    void increment() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_value++;
+std::queue<int> data_queue;  // 共享队列
+std::mutex mtx;              // 互斥量
+std::condition_variable cv;  // 条件变量
+bool done = false;           // 结束标志
+
+// 生产者线程
+void producer() {
+    for (int i = 0; i < 10; ++i) {
+        {
+            std::unique_lock<std::mutex> lock(mtx);  // 加锁
+            data_queue.push(i);
+            std::cout << "Produced: " << i << std::endl;
+        }  // 自动解锁
+        
+        cv.notify_one();  // 通知消费者
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    int getValue() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_value;
+    
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        done = true;
     }
-private:
-    int m_value;
-    mutable std::mutex m_mutex;
-};
+    
+    cv.notify_one();  // 通知消费者结束
+}
+
+// 消费者线程
+void consumer() {
+    while (true) {
+        std::unique_lock<std::mutex> lock(mtx);
+        
+        // 等待队列非空或结束标志
+        cv.wait(lock, [] { return !data_queue.empty() || done; });
+        
+        // 检查是否结束
+        if (done && data_queue.empty()) {
+            break;
+        }
+        
+        // 处理数据
+        int data = data_queue.front();
+        data_queue.pop();
+        std::cout << "Consumed: " << data << std::endl;
+    }
+}
 
 int main() {
-    std::shared_ptr<SharedData> data = std::make_shared<SharedData>(0);
+    std::thread producer_thread(producer);
+    std::thread consumer_thread(consumer);
     
-    // 多个线程共享data指针
-    std::thread t1([data]() {
-        for (int i = 0; i < 10000; i++) {
-            data->increment();
-        }
-    });
+    producer_thread.join();
+    consumer_thread.join();
     
-    std::thread t2([data]() {
-        for (int i = 0; i < 10000; i++) {
-            data->increment();
-        }
-    });
-    
-    t1.join();
-    t2.join();
-    
-    std::cout << "最终值: " << data->getValue() << std::endl;
     return 0;
 }
 ```
+
 ### 15. sizeof是在编译期还是在运行期确定
 **答案**：sizeof运算符的结果在编译期确定，它返回类型或变量所占用的内存字节数。
+
 **示例**：
 ```cpp
 #include <iostream>
+
 int main() {
     int a = 10;
     int arr[5];
+    
     std::cout << "sizeof(int): " << sizeof(int) << std::endl;          // 编译期确定
     std::cout << "sizeof(a): " << sizeof(a) << std::endl;              // 编译期确定
     std::cout << "sizeof(arr): " << sizeof(arr) << std::endl;          // 编译期确定
     std::cout << "sizeof(arr[0]): " << sizeof(arr[0]) << std::endl;    // 编译期确定
     std::cout << "Array length: " << sizeof(arr) / sizeof(arr[0]) << std::endl;  // 编译期计算
+    
     return 0;
 }
 ```
+
 ### 16. 函数重载的机制。重载是在编译期还是在运行期确定
 **答案**：函数重载是指在同一作用域内，可以有一组具有相同函数名、不同参数列表（参数类型、个数或顺序不同）的函数。函数重载的机制是**编译期多态**，编译器在编译时根据函数调用的实参类型和数量，确定调用哪个具体的函数。
+
 **示例**：
 ```cpp
 #include <iostream>
@@ -530,3 +775,4 @@ int main() {
     return 0;
 }
 ```
+
